@@ -5,47 +5,49 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
-	"github.com/jkstack/natpass/code/client/global"
-	"github.com/jkstack/natpass/code/client/pool"
-	"github.com/jkstack/natpass/code/client/rule"
-	"github.com/jkstack/natpass/code/network"
 	"github.com/lwch/logging"
+	"github.com/lwch/natpass/code/client/conn"
+	"github.com/lwch/natpass/code/client/global"
+	"github.com/lwch/natpass/code/client/rule"
+	"github.com/lwch/natpass/code/network"
 	"github.com/lwch/runtime"
 )
 
 // VNC vnc handler
 type VNC struct {
 	sync.RWMutex
-	Name        string
-	cfg         global.Rule
-	link        *Link
-	chClipboard chan *network.VncClipboard
+	Name         string
+	cfg          *global.Rule
+	link         *Link
+	readTimeout  time.Duration
+	writeTimeout time.Duration
+	chClipboard  chan *network.VncClipboard
 }
 
 // New new vnc
-func New(cfg global.Rule) *VNC {
+func New(cfg *global.Rule, readTimeout, writeTimeout time.Duration) *VNC {
 	return &VNC{
-		Name:        cfg.Name,
-		cfg:         cfg,
-		chClipboard: make(chan *network.VncClipboard),
+		Name:         cfg.Name,
+		cfg:          cfg,
+		readTimeout:  readTimeout,
+		writeTimeout: writeTimeout,
+		chClipboard:  make(chan *network.VncClipboard),
 	}
 }
 
 // NewLink new link
-func (v *VNC) NewLink(id, remote string, remoteIdx uint32, localConn net.Conn, remoteConn *pool.Conn) rule.Link {
+func (v *VNC) NewLink(id, remote string, localConn net.Conn, remoteConn *conn.Conn) rule.Link {
 	remoteConn.AddLink(id)
-	logging.Info("create link %s for rule %s on connection %d",
-		id, v.Name, remoteConn.Idx)
 	link := &Link{
-		parent:    v,
-		id:        id,
-		target:    remote,
-		targetIdx: remoteIdx,
-		remote:    remoteConn,
+		parent: v,
+		id:     id,
+		target: remote,
+		remote: remoteConn,
 	}
 	if v.link != nil {
-		v.link.close()
+		v.link.Close(true)
 	}
 	v.link = link
 	return link
@@ -84,16 +86,21 @@ func (v *VNC) GetPort() uint16 {
 	return v.cfg.LocalPort
 }
 
+// OnDisconnect on disconnect message
+func (v *VNC) OnDisconnect(id string) {
+	// TODO
+}
+
 // Handle handle shell
-func (v *VNC) Handle(pl *pool.Pool) {
+func (v *VNC) Handle(c *conn.Conn) {
 	defer func() {
 		if err := recover(); err != nil {
 			logging.Error("close shell: %s, err=%v", v.Name, err)
 		}
 	}()
-	pf := func(cb func(*pool.Pool, http.ResponseWriter, *http.Request)) http.HandlerFunc {
+	pf := func(cb func(*conn.Conn, http.ResponseWriter, *http.Request)) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			cb(pl, w, r)
+			cb(c, w, r)
 		}
 	}
 	mux := http.NewServeMux()
@@ -102,9 +109,17 @@ func (v *VNC) Handle(pl *pool.Pool) {
 	mux.HandleFunc("/clipboard", pf(v.Clipboard))
 	mux.HandleFunc("/ws/", pf(v.WS))
 	mux.HandleFunc("/", v.Render)
+	if v.cfg.LocalPort == 0 {
+		v.cfg.LocalPort = global.GeneratePort()
+		logging.Info("generate port for %s: %d", v.Name, v.cfg.LocalPort)
+	}
 	svr := &http.Server{
 		Addr:    fmt.Sprintf("%s:%d", v.cfg.LocalAddr, v.cfg.LocalPort),
 		Handler: mux,
 	}
 	runtime.Assert(svr.ListenAndServe())
+}
+
+func (v *VNC) remove(id string) {
+	v.link = nil
 }

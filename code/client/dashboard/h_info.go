@@ -4,24 +4,26 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/jkstack/natpass/code/client/rule"
+	"github.com/lwch/natpass/code/client/rule"
 )
 
 // Info information data
 func (db *Dashboard) Info(w http.ResponseWriter, r *http.Request) {
 	var ret struct {
-		Rules         int `json:"rules"`
-		PhysicalLinks int `json:"physical_links"`
-		VirtualLinks  int `json:"virtual_links"`
-		Session       int `json:"sessions"`
+		Rules        int `json:"rules"`
+		VirtualLinks int `json:"virtual_links"`
+		Session      int `json:"sessions"`
 	}
 	ret.Rules = len(db.cfg.Rules)
-	ret.PhysicalLinks = db.pl.Size()
 	db.mgr.Range(func(t rule.Rule) {
-		n := len(t.GetLinks())
-		ret.VirtualLinks += n
-		if t.GetTypeName() == "shell" {
-			ret.Session += n
+		lr, ok := t.(rule.LinkedRule)
+		if ok {
+			n := len(lr.GetLinks())
+			ret.VirtualLinks += n
+			if t.GetTypeName() == "shell" ||
+				t.GetTypeName() == "vnc" {
+				ret.Session += n
+			}
 		}
 	})
 	w.Header().Set("Content-Type", "application/json")

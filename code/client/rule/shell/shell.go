@@ -5,42 +5,44 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"time"
 
-	"github.com/jkstack/natpass/code/client/global"
-	"github.com/jkstack/natpass/code/client/pool"
-	"github.com/jkstack/natpass/code/client/rule"
 	"github.com/lwch/logging"
+	"github.com/lwch/natpass/code/client/conn"
+	"github.com/lwch/natpass/code/client/global"
+	"github.com/lwch/natpass/code/client/rule"
 	"github.com/lwch/runtime"
 )
 
 // Shell shell handler
 type Shell struct {
 	sync.RWMutex
-	Name  string
-	cfg   global.Rule
-	links map[string]*Link
+	Name         string
+	cfg          *global.Rule
+	links        map[string]*Link
+	readTimeout  time.Duration
+	writeTimeout time.Duration
 }
 
 // New new shell
-func New(cfg global.Rule) *Shell {
+func New(cfg *global.Rule, readTimeout, writeTimeout time.Duration) *Shell {
 	return &Shell{
-		Name:  cfg.Name,
-		cfg:   cfg,
-		links: make(map[string]*Link),
+		Name:         cfg.Name,
+		cfg:          cfg,
+		links:        make(map[string]*Link),
+		readTimeout:  readTimeout,
+		writeTimeout: writeTimeout,
 	}
 }
 
 // NewLink new link
-func (shell *Shell) NewLink(id, remote string, remoteIdx uint32, localConn net.Conn, remoteConn *pool.Conn) rule.Link {
+func (shell *Shell) NewLink(id, remote string, localConn net.Conn, remoteConn *conn.Conn) rule.Link {
 	remoteConn.AddLink(id)
-	logging.Info("create link %s for shell %s on connection %d",
-		id, shell.Name, remoteConn.Idx)
 	link := &Link{
-		parent:    shell,
-		id:        id,
-		target:    remote,
-		targetIdx: remoteIdx,
-		remote:    remoteConn,
+		parent: shell,
+		id:     id,
+		target: remote,
+		remote: remoteConn,
 	}
 	shell.Lock()
 	shell.links[link.id] = link
@@ -84,16 +86,26 @@ func (shell *Shell) GetPort() uint16 {
 	return shell.cfg.LocalPort
 }
 
+// OnDisconnect on disconnect message
+func (shell *Shell) OnDisconnect(id string) {
+	shell.RLock()
+	link := shell.links[id]
+	shell.RUnlock()
+	if link != nil {
+		link.Close(false)
+	}
+}
+
 // Handle handle shell
-func (shell *Shell) Handle(pl *pool.Pool) {
+func (shell *Shell) Handle(c *conn.Conn) {
 	defer func() {
 		if err := recover(); err != nil {
 			logging.Error("close shell: %s, err=%v", shell.Name, err)
 		}
 	}()
-	pf := func(cb func(*pool.Pool, http.ResponseWriter, *http.Request)) http.HandlerFunc {
+	pf := func(cb func(*conn.Conn, http.ResponseWriter, *http.Request)) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			cb(pl, w, r)
+			cb(c, w, r)
 		}
 	}
 	mux := http.NewServeMux()
@@ -101,6 +113,10 @@ func (shell *Shell) Handle(pl *pool.Pool) {
 	mux.HandleFunc("/ws/", pf(shell.WS))
 	mux.HandleFunc("/resize", pf(shell.Resize))
 	mux.HandleFunc("/", shell.Render)
+	if shell.cfg.LocalPort == 0 {
+		shell.cfg.LocalPort = global.GeneratePort()
+		logging.Info("generate port for %s: %d", shell.Name, shell.cfg.LocalPort)
+	}
 	svr := &http.Server{
 		Addr:    fmt.Sprintf("%s:%d", shell.cfg.LocalAddr, shell.cfg.LocalPort),
 		Handler: mux,

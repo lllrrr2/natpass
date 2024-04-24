@@ -12,7 +12,6 @@ var page = {
         $.get('/api/info', function(ret) {
             $('#cards').empty();
             page.add_card('规则总数', ret.rules);
-            page.add_card('物理连接数', ret.physical_links);
             page.add_card('虚拟连接数', ret.virtual_links);
             page.add_card('终端会话', ret.sessions);
         });
@@ -37,13 +36,9 @@ var page = {
                 });
                 var op = '';
                 switch (rule.type) {
-                case 'reverse':
-                    op = `
-                    <a href="http://${location.hostname}:${rule.port}" target="_blank">http</a>
-                    <a href="https://${location.hostname}:${rule.port}" target="_blank">https</a>`;
-                    break;
                 case 'shell':
                 case 'vnc':
+                case 'code-server':
                     op = `<a href="http://${location.host}/terminal.html?name=${rule.name}" target="_blank">连接</a>`;
                     break;
                 }

@@ -1,21 +1,31 @@
-module github.com/jkstack/natpass
+module github.com/lwch/natpass
 
-go 1.16
+go 1.18
 
 require (
-	github.com/creack/pty v1.1.17
-	github.com/dustin/go-humanize v1.0.0
+	github.com/common-nighthawk/go-figure v0.0.0-20210622060536-734e95fb86be
+	github.com/creack/pty v1.1.21
+	github.com/dustin/go-humanize v1.0.1
 	github.com/go-bindata/go-bindata/v3 v3.1.3
-	github.com/gorilla/websocket v1.4.2
-	github.com/kardianos/service v1.2.0
-	github.com/kisielk/errcheck v1.6.0 // indirect
-	github.com/lwch/logging v0.0.0-20211203094902-ecb971ed7cdc
-	github.com/lwch/rdesktop v1.0.0
-	github.com/lwch/runtime v0.0.0-20190520054850-8c97e19e0c6d
-	github.com/lwch/yaml v0.0.0-20211206085137-772f80e85a26
+	github.com/gorilla/websocket v1.5.1
+	github.com/kardianos/service v1.2.2
+	github.com/lwch/logging v1.0.1
+	github.com/lwch/rdesktop v1.2.2
+	github.com/lwch/runtime v1.0.1
+	github.com/lwch/yaml v0.0.0-20220711084242-14c4f5845abe
+	github.com/spf13/cobra v1.8.0
+	golang.org/x/sys v0.18.0
+	golang.org/x/text v0.14.0
+	google.golang.org/protobuf v1.33.0
+)
+
+require (
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/kisielk/errcheck v1.6.3 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
-	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e
-	golang.org/x/text v0.3.7
-	golang.org/x/tools v0.1.8 // indirect
-	google.golang.org/protobuf v1.27.1
+	golang.org/x/mod v0.14.0 // indirect
+	golang.org/x/net v0.23.0 // indirect
+	golang.org/x/tools v0.16.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
